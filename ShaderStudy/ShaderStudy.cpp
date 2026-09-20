@@ -376,18 +376,25 @@ int WINAPI wWinMain(
     );
 
     /*
-    * 버텍스, 즉 점 3개가 담긴 배열
+    * 버텍스 4개로 변경, 점 3개씩 삼각형을 이룬다.
     */
     Vertex vertices[] =
     {
-        { -0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f }, // 위: 빨강
-        { 0.5f, 0.5f, 0.0f,  0.0f, 1.0f, 0.0f }, // 오른쪽: 초록
-        {-0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f },  // 왼쪽: 파랑
-        
-        { 0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f }, // 위: 빨강
-        { 0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f }, // 오른쪽: 초록
-        {-0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f }  // 왼쪽: 파랑
+        { -0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f},
+        {  0.5f,  0.5f, 0.0f,  0.0f, 1.0f, 0.0f},
+        { -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f},
+        {  0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f},
     };
+
+    /*
+    * 두개의 점이 중복되기 때문에, 삼각형을 이루는 점 index를 저장한다.
+    */
+    UINT indices[] =
+    {
+        0, 1, 2,
+        2, 1, 3
+    };
+
 
     /*
     * 버퍼를 어떻게 만들지 설정문
@@ -633,6 +640,31 @@ int WINAPI wWinMain(
     //뷰포트 연결
     context->RSSetViewports(1, &viewport);
 
+    /*-------------------------------------여기부터 인덱스 버퍼 설정------------------------------*/
+    D3D11_BUFFER_DESC indexBufferDesc{};
+    
+    indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    indexBufferDesc.ByteWidth = sizeof(indices);
+    indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA indexData{};
+    indexData.pSysMem = indices;
+
+    ID3D11Buffer* indexBuffer = nullptr;
+
+    device->CreateBuffer(
+        &indexBufferDesc,
+        &indexData,
+        &indexBuffer
+    );
+
+    context->IASetIndexBuffer(
+        indexBuffer,
+        DXGI_FORMAT_R32_UINT,
+        0
+    );
+
+
     /*-------------------------------------여기부터 메시지 루프 설정------------------------------*/
 
     /*
@@ -709,9 +741,13 @@ int WINAPI wWinMain(
                 backgroundColor
             );
 
-            // 2. 현재 연결된 버퍼와 셰이더로 삼각형을 그림
-            context->Draw(6, 0);
+            /*
+            * 2. 현재 연결된 버퍼와 셰이더로 삼각형을 그림
+            * 버텍스 기준으로 만들기 때문에 인덱스로 만들려면 아래 코드 처럼 해야한다.
+            */ 
+            //context->Draw(6, 0);
 
+            context->DrawIndexed(6, 0, 0);
             swapChain->Present(1, 0);
         }
     }
