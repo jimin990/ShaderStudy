@@ -69,4 +69,4 @@ context->IASetInputLayout(inputLayout);
 ## IA (Input Assembler)
 IA 는 정점 입력을 관리하고 조립한다.
 
-정점 입력에는 버텍스 버퍼, 인덱스 버퍼, 토폴리지가 있다.
+정점 입력에는 버텍스 버퍼, 인덱스 버퍼, 인덱스 레이아웃, 토폴리지가 있다.
