@@ -65,3 +65,8 @@ context->IASetInputLayout(inputLayout);
 ```
 
 이후 레이아웃을 지정하여, 이 버퍼를 실제로 GPU가 어떻게 읽는지 규칙을 지정해 준다.
+
+## IA (Input Assembler)
+IA 는 정점 입력을 관리하고 조립한다.
+
+정점 입력에는 버텍스 버퍼, 인덱스 버퍼, 토폴리지가 있다.
