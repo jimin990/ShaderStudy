@@ -73,6 +73,24 @@ struct TransformData
     float padding[3];
 };
 
+// D3D11 객체들 분리
+struct Renderer {
+    /*
+    * 필요한 자원을 만든다. 예) 버퍼, 셰이더, RTV 생성
+    */
+    ComPtr<ID3D11Device> device;
+
+    /*
+    * 자원을 연결하고 작업을 요청한다.
+    */
+    ComPtr<ID3D11DeviceContext> context;
+
+    /*
+    * 입력 레이아웃이란 버텍스 버퍼의 데이터를 어떻게 나눠 읽어서 셰이더에 전달할지 설명서이다.
+    */
+    ComPtr<ID3D11InputLayout> inputLayout;
+};
+
 /*
 * LRESULT: 메시지 처리 결과를 반환하는 자료형
 * CALLBACK: Windows가 요구하는 함수 호출 규약
@@ -196,17 +214,182 @@ int WINAPI wWinMain(
     */
     ShowWindow(hwnd, SW_SHOW);
 
-    /*-------------------------------------여기부터 DirectX 설정------------------------------*/
+    /*-------------------------------------여기부터 렌더링 파이프 라인------------------------------*/
+
+    /*-------------------------------------IA(Input Assembler) 과정------------------------------*/
+
+    Renderer renderer{};
+
+    /*-------------------------------------여기부터 버텍스 버퍼 설정------------------------------*/
+    /*
+    * 버텍스의 위치값
+    * 버텍스 4개로 변경, 점 3개씩 삼각형을 이룬다.
+    * 버텍스 색상까지 함께 들어있다.
+    * 버텍스 버퍼 초기값
+    */
+    Vertex vertices[] =
+    {
+        { -0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f},
+        {  0.5f,  0.5f, 0.0f,  0.0f, 1.0f, 0.0f},
+        { -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f},
+        {  0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f},
+    };
 
     /*
-    * 필요한 자원을 만든다. 예) 버퍼, 셰이더, RTV 생성
-    */
-    ComPtr<ID3D11Device> device;
+   * 버퍼를 어떻게 만들지 설정문
+   */
+    D3D11_BUFFER_DESC bufferDesc{};
 
     /*
-    * 자원을 연결하고 작업을 요청한다.
+    * 정점 배열 전체를 담을 크기
+    * 배열 전체를 담을 공간을 할당
     */
-    ComPtr<ID3D11DeviceContext> context;
+    bufferDesc.ByteWidth = sizeof(vertices);
+
+    /*
+    * 생성할 때 데이터를 넣고, 이후에는 변경하지 않음
+    */
+    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
+
+    /*
+    * 정점 데이터를 사용하는 버퍼로 사용
+    */
+    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    /*
+    * 처음 넣을 데이터 지정
+    */
+    D3D11_SUBRESOURCE_DATA initialData{};
+    initialData.pSysMem = vertices;
+
+    /*
+    * 실제 버퍼를 담을 스마트 포인터
+    */
+    ComPtr<ID3D11Buffer> vertexBuffer;
+
+    /*
+    * 실제 버퍼를 생성
+    */
+    HRESULT result = renderer.device->CreateBuffer(
+        &bufferDesc,    // 앞선 설정대로 버퍼를 생성
+        &initialData,   // 배열의 데이털 복사해서 넣음
+        vertexBuffer.GetAddressOf()
+    );
+
+    if (FAILED(result))
+    {
+        return -1;
+    }
+
+   /*-------------------------------------여기부터 인덱스 버퍼 설정------------------------------*/
+   /*
+   * 버텍스의 인덱스 값
+   * 두개의 점이 중복되기 때문에, 삼각형을 이루는 점 index를 저장한다.
+   */
+    UINT indices[] =
+    {
+        0, 1, 2,
+        2, 1, 3
+    };
+
+    D3D11_BUFFER_DESC indexBufferDesc{};
+
+    indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    indexBufferDesc.ByteWidth = sizeof(indices);
+    indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA indexData{};
+    indexData.pSysMem = indices;
+
+    ID3D11Buffer* indexBuffer = nullptr;
+
+    renderer.device->CreateBuffer(
+        &indexBufferDesc,
+        &indexData,
+        &indexBuffer
+    );
+
+    renderer.context->IASetIndexBuffer(
+        indexBuffer,
+        DXGI_FORMAT_R32_UINT,
+        0
+    );
+
+    /*-------------------------------------여기부터 InputLayout 설정------------------------------*/
+    /*
+    * 정점 안에 있는 정보 한 항목을 어떻게 읽을지 설명하는 구조체 변수
+    * 위치와 색상, 두 항목이 존재하므로 배열의 크기를 2로 지정
+    */
+    D3D11_INPUT_ELEMENT_DESC element[2]{};
+
+    // 셰이더의 지정된 이름으로 입력 전달
+    element[0].SemanticName = "POSITION";
+    element[0].SemanticIndex = 0;
+
+    // 32비트 실수 3개로 읽는다.
+    element[0].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+    element[0].InputSlot = 0;
+
+    // 정점의 처음부터 읽는다. 따라서 x,y,z를 읽는다.
+    element[0].AlignedByteOffset = 0;
+    element[0].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+    element[0].InstanceDataStepRate = 0;
+
+
+    // 셰이더의 지정된 이름으로 입력 전달
+    element[1].SemanticName = "COLOR";
+    element[1].SemanticIndex = 0;
+    element[1].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+    element[1].InputSlot = 0;
+
+    // 앞선 x,y,z가 12바이트를 차지하기 때문에 그 뒤 부터 읽게 설정한다.
+    element[1].AlignedByteOffset = 12;
+    element[1].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+    element[1].InstanceDataStepRate = 0;
+
+    result = device->CreateInputLayout(
+        element,
+        2,
+        vertexShaderCode->GetBufferPointer(),
+        vertexShaderCode->GetBufferSize(),
+        inputLayout.GetAddressOf()
+    );
+
+    if (FAILED(result))
+    {
+        return -1;
+    }
+
+    /*
+    * 앞으로 정점데이터를 읽을 때 사용할 레이아웃 지정
+    * IA는 Input Assembler
+    */
+    context->IASetInputLayout(inputLayout.Get());
+
+    /*
+    * stride: 한 정점에서 다음 정점까지의 바이트 간격
+    * offset: 버퍼의 어디서 부터 읽기 시작할지
+    * 현재 위치 + 컬러 = 24바이트, 그러므로 현재 간격은 24바이트이다.
+    */
+    UINT stride = sizeof(Vertex);
+    UINT offset = 0;
+
+    ID3D11Buffer* buffer = vertexBuffer.Get();
+
+    context->IASetVertexBuffers(
+        0,
+        1,
+        &buffer,
+        &stride,
+        &offset
+    );
+
+    // 삼각형으로 연결하도록 지정한다.
+    context->IASetPrimitiveTopology(
+        D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+    );
+
+    /*-------------------------------------------------------------------*/
 
     /*
     * 그린 화면을 창에 표기하기 위한 버퍼들을 관리하는 객체
@@ -286,7 +469,7 @@ int WINAPI wWinMain(
     desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
 
-    HRESULT result = D3D11CreateDeviceAndSwapChain(
+    result = D3D11CreateDeviceAndSwapChain(
         nullptr,
         D3D_DRIVER_TYPE_HARDWARE,
         nullptr,
@@ -296,9 +479,9 @@ int WINAPI wWinMain(
         D3D11_SDK_VERSION,
         &desc,
         swapChain.GetAddressOf(),
-        device.GetAddressOf(),
+        renderer.device.GetAddressOf(),
         nullptr,
-        context.GetAddressOf()
+        renderer.context.GetAddressOf()
     );
 
     if (FAILED(result))
@@ -375,72 +558,6 @@ int WINAPI wWinMain(
         &bufferForVS
     );
 
-    /*
-    * 버텍스 4개로 변경, 점 3개씩 삼각형을 이룬다.
-    */
-    Vertex vertices[] =
-    {
-        { -0.5f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f},
-        {  0.5f,  0.5f, 0.0f,  0.0f, 1.0f, 0.0f},
-        { -0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f},
-        {  0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f},
-    };
-
-    /*
-    * 두개의 점이 중복되기 때문에, 삼각형을 이루는 점 index를 저장한다.
-    */
-    UINT indices[] =
-    {
-        0, 1, 2,
-        2, 1, 3
-    };
-
-
-    /*
-    * 버퍼를 어떻게 만들지 설정문
-    */
-    D3D11_BUFFER_DESC bufferDesc{};
-
-    /*
-    * 정점 배열 전체를 담을 크기
-    * 배열 전체를 담을 공간을 할당
-    */
-    bufferDesc.ByteWidth = sizeof(vertices);
-
-    /*
-    * 생성할 때 데이터를 넣고, 이후에는 변경하지 않음
-    */
-    bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-
-    /*
-    * 정점 데이터를 사용하는 버퍼로 사용
-    */
-    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
-    /*
-    * 처음 넣을 데이터 지정
-    */
-    D3D11_SUBRESOURCE_DATA initialData{};
-    initialData.pSysMem = vertices;
-
-    /*
-    * 실제 버퍼를 담을 스마트 포인터
-    */
-    ComPtr<ID3D11Buffer> vertexBuffer;
-
-    /*
-    * 실제 버퍼를 생성
-    */
-    result = device->CreateBuffer(
-        &bufferDesc,    // 앞선 설정대로 버퍼를 생성
-        &initialData,   // 배열의 데이털 복사해서 넣음
-        vertexBuffer.GetAddressOf()
-    );
-
-    if (FAILED(result))
-    {
-        return -1;
-    }
 
     /*
     * 컴파일된 셰이더 코드
@@ -550,84 +667,6 @@ int WINAPI wWinMain(
     // 색상 계산은 이 픽셀 셰이더를 사용해
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
 
-    /*
-    * 정점 안에 있는 정보 한 항목을 어떻게 읽을지 설명하는 구조체 변수
-    * 위치와 색상, 두 항목이 존재하므로 배열의 크기를 2로 지정
-    */
-    D3D11_INPUT_ELEMENT_DESC element[2]{};
-
-    // 셰이더의 지정된 이름으로 입력 전달
-    element[0].SemanticName = "POSITION";
-    element[0].SemanticIndex = 0;
-
-    // 32비트 실수 3개로 읽는다.
-    element[0].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-    element[0].InputSlot = 0;
-
-    // 정점의 처음부터 읽는다. 따라서 x,y,z를 읽는다.
-    element[0].AlignedByteOffset = 0;
-    element[0].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    element[0].InstanceDataStepRate = 0;
-
-
-    // 셰이더의 지정된 이름으로 입력 전달
-    element[1].SemanticName = "COLOR";
-    element[1].SemanticIndex = 0;
-    element[1].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-    element[1].InputSlot = 0;
-
-    // 앞선 x,y,z가 12바이트를 차지하기 때문에 그 뒤 부터 읽게 설정한다.
-    element[1].AlignedByteOffset = 12;
-    element[1].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    element[1].InstanceDataStepRate = 0;
-
-    /*
-    * 입력 레이아웃이란 버텍스 버퍼의 데이터를 어떻게 나눠 읽어서 셰이더에 전달할지 설명서
-    */
-    ComPtr<ID3D11InputLayout> inputLayout;
-
-    result = device->CreateInputLayout(
-        element,
-        2,
-        vertexShaderCode->GetBufferPointer(),
-        vertexShaderCode->GetBufferSize(),
-        inputLayout.GetAddressOf()
-    );
-
-    if (FAILED(result))
-    {
-        return -1;
-    }
-
-    /*
-    * 앞으로 정점데이터를 읽을 때 사용할 레이아웃 지정
-    * IA는 Input Assembler
-    */
-    context->IASetInputLayout(inputLayout.Get());
-
-    /*
-    * stride: 한 정점에서 다음 정점까지의 바이트 간격
-    * offset: 버퍼의 어디서 부터 읽기 시작할지
-    * 현재 위치 + 컬러 = 24바이트, 그러므로 현재 간격은 24바이트이다.
-    */
-    UINT stride = sizeof(Vertex);
-    UINT offset = 0;
-
-    ID3D11Buffer* buffer = vertexBuffer.Get();
-
-    context->IASetVertexBuffers(
-        0,
-        1,
-        &buffer,
-        &stride,
-        &offset
-    );
-
-    // 삼각형으로 연결하도록 지정한다.
-    context->IASetPrimitiveTopology(
-        D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-    );
-
     // 뷰포트 생성
     D3D11_VIEWPORT viewport{};
     viewport.TopLeftX = 0.0f;
@@ -639,31 +678,6 @@ int WINAPI wWinMain(
 
     //뷰포트 연결
     context->RSSetViewports(1, &viewport);
-
-    /*-------------------------------------여기부터 인덱스 버퍼 설정------------------------------*/
-    D3D11_BUFFER_DESC indexBufferDesc{};
-    
-    indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    indexBufferDesc.ByteWidth = sizeof(indices);
-    indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-
-    D3D11_SUBRESOURCE_DATA indexData{};
-    indexData.pSysMem = indices;
-
-    ID3D11Buffer* indexBuffer = nullptr;
-
-    device->CreateBuffer(
-        &indexBufferDesc,
-        &indexData,
-        &indexBuffer
-    );
-
-    context->IASetIndexBuffer(
-        indexBuffer,
-        DXGI_FORMAT_R32_UINT,
-        0
-    );
-
 
     /*-------------------------------------여기부터 메시지 루프 설정------------------------------*/
 
