@@ -1,3 +1,43 @@
+# Direct3D 11
+DirectX에 포함된 3D그래픽 API이다.
+
+DirectX는 그래픽만을 담당하는 것이 아니라, 멀티미디어 기술을 초함하는 큰 묶음이고
+
+그 중 그래픽을 담당하는 것이 Direct3D이다.
+
+## Device
+```
+ComPtr<ID3D11Device> device;
+```
+
+Device는 Direct3D의 객체와 GPU 리소스를 생성하는 객체로 그래픽 연산에 필요한 객체들을 생성할 때 사용된다.
+
+앞에 I는 인터페이스를 나타낸다.
+
+```
+Vertex Buffer
+Index Buffer
+Texture
+Vertex Shader
+Pixel Shader
+RenderTargetView
+InputLayout
+```
+와 같은 객체들이 생성된다.
+
+## context
+
+```
+ComPtr<ID3D11DeviceContext> context;
+```
+
+Context는 앞서 만든 객체들을 실제 렌더링 파이프에 연결, 설정하고 렌더링 명령을 내린다.
+
+
+# IA (Input Assembler)
+
+
+
 버퍼는 GPU가 데이터를 읽을 수 있는 메모리 공간이다.
 
 버퍼를 만들기 위해서는, 우선 4가지가 필요하다.
