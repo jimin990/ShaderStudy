@@ -8,6 +8,21 @@ DirectX는 그래픽만을 담당하는 것이 아니라, 멀티미디어 기술
 ## Device
 ```
 ComPtr<ID3D11Device> device;
+
+HRESULT result = D3D11CreateDeviceAndSwapChain(
+    nullptr,
+    D3D_DRIVER_TYPE_HARDWARE,
+    nullptr,
+    0,
+    nullptr,
+    0,
+    D3D11_SDK_VERSION,
+    &desc,
+    swapChain.GetAddressOf(),
+    device.GetAddressOf(),
+    nullptr,
+    context.GetAddressOf()
+);
 ```
 
 Device는 Direct3D의 객체와 GPU 리소스를 생성하는 객체로 그래픽 연산에 필요한 객체들을 생성할 때 사용된다.
