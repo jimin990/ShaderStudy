@@ -168,3 +168,23 @@ context->IASetInputLayout(inputLayout);
 IA 는 정점 입력을 관리하고 조립한다.
 
 정점 입력에는 버텍스 버퍼, 인덱스 버퍼, 인덱스 레이아웃, 토폴리지가 있다.
+
+## backBuffer
+backbuffer는 2d image textue이다.
+
+화면을 출력하는 과정이 출력된다면 부자연스럽기 때문에, 출력하는 화면이 다 그려지고 난 후 화면으로 출력한다.
+이때 화면으로 쓰일 화면을 미리 만들어 둔 곳을 backbuffer라고 한다.
+
+backbuffer는 앞서 말한 것 처럼 2d texture기 때문에 이 이미지에 이전 렌더링 결과를 가르켜 화면을 구성한다.
+이때 이것을 지정하는게 targerView 이다.
+
+```
+context->OMSetRenderTargets(
+    1,
+    renderTargetView.GetAddressOf(),
+    nullptr
+);
+```
+앞으로 렌더링 결과를 이 RTV가 가리키는 Texture에 넣으라는 코드.
+
+이때도 아직 실제 사용자가 보는 화면에 보여지고 있는 상태가 아니다.
